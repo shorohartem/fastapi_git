@@ -1,9 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from app.api.router import router
 from app.core.config import settings
-from starlette.middleware.cors import CORSMiddleware
-
+from app.api.router import router   # если роутер есть — импортируй его
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -11,7 +9,6 @@ async def lifespan(app: FastAPI):
     app.state.settings = settings
     yield
     print("Shutting down FastAPI OCR Service...")
-
 
 def create_app() -> FastAPI:
     app = FastAPI(
@@ -22,4 +19,9 @@ def create_app() -> FastAPI:
     )
     app.include_router(router)
     return app
+
 app = create_app()
+
+@app.get("/health")
+async def health_check():
+    return {"status": True}
