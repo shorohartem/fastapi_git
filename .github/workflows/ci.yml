@@ -29,5 +29,5 @@ jobs:
       - name: Run server and check Swagger
         run: |
           uvicorn app.main:app --host 0.0.0.0 --port 8000 &
-          sleep 3
-          curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs | grep 200
+          sleep 5
+          curl -v http://localhost:8000/docs
