@@ -7,26 +7,22 @@ from fastapi import FastAPI
 
 app = FastAPI(title="OCR Service", docs_url="/docs")
 
-@app.get("/health")
-async def health_check():
-    return {"status": True}
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Starting FastAPI OCR Service...")
+    app.state.settings = settings
+    yield
+    print("Shutting down FastAPI OCR Service...")
 
-# @asynccontextmanager
-# async def lifespan(app: FastAPI):
-#     print("Starting FastAPI OCR Service...")
-#     app.state.settings = settings
-#     yield
-#     print("Shutting down FastAPI OCR Service...")
-
-# def create_app() -> FastAPI:
-#     app = FastAPI(
-#         title="OCR Service",
-#         docs_url="/docs",
-#         description="Анализ изображений через Tesseract и отправка уведомлений",
-#         version="1.0.0",
-#         lifespan=lifespan
-#     )
-#     app.include_router(router)
-#     return app
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title="OCR Service",
+        docs_url="/docs",
+        description="Анализ изображений через Tesseract и отправка уведомлений",
+        version="1.0.0",
+        lifespan=lifespan
+    )
+    app.include_router(router)
+    return app
 
 
