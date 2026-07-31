@@ -13,6 +13,7 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(
         title="OCR Service",
+        docs_url="/docs",
         description="Анализ изображений через Tesseract и отправка уведомлений",
         version="1.0.0",
         lifespan=lifespan
@@ -24,5 +25,5 @@ app = create_app()
 
 @app.get("/health")
 async def health_check():
-    return {"status": False}
+    return {"status": True}
 
