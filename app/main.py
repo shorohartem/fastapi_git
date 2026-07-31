@@ -24,4 +24,5 @@ app = create_app()
 
 @app.get("/health")
 async def health_check():
-    return {"status": True}
+    return {"status": False}
+
