@@ -1,8 +1,8 @@
-from pydantic_settings import BaseSettings
-from typing import Optional
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     MEDIA_ROOT: str = "/shared_media"
 
@@ -16,10 +16,6 @@ class Settings(BaseSettings):
     NOTIFICATION_EMAIL: str = ""
 
     TESSERACT_LANG: str = "rus+eng"
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 settings = Settings()

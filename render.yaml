@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: fastapi-ocr
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: MEDIA_ROOT
+        value: /tmp/shared_media
+      - key: TESSERACT_LANG
+        value: rus+eng

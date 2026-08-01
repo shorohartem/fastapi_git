@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from app.core.config import settings
 from app.api.router import router
 
@@ -18,6 +19,15 @@ def create_app() -> FastAPI:
         version="1.0.0",
         lifespan=lifespan
     )
+
+    @app.get("/", include_in_schema=False)
+    async def swagger_redirect():
+        return RedirectResponse(url="/docs")
+
+    @app.get("/health", tags=["system"])
+    async def health_check():
+        return {"status": "ok"}
+
     app.include_router(router)
     return app
 

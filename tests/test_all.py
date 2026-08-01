@@ -7,7 +7,7 @@ client = TestClient(app)
 def test_health_endpoint():
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": True}
+    assert response.json() == {"status": "ok"}
 
 
 def test_health_method_not_allowed():

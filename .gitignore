@@ -5,7 +5,7 @@ actions-runner/
 .idea/
 
 # Python
-pycache/
+__pycache__/
 *.pyc
 .venv/
 

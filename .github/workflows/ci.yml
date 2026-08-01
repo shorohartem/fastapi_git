@@ -1,4 +1,4 @@
-name: CI + local deploy
+name: CI
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  test-and-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,27 +22,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Run tests
+        run: pytest --cov=app --cov-report=term-missing
+
       - name: Build image and smoke-test
         run: |
           docker build -t fastapi-ocr .
           docker run -d --name test -p 8000:8000 fastapi-ocr
+          trap 'docker rm -f test' EXIT
           for i in $(seq 1 30); do
-            curl -fs http://localhost:8000/docs > /dev/null && break
+            curl -fs http://localhost:8000/health > /dev/null && break
             sleep 1
           done
-          curl -f http://localhost:8000/docs
-          docker rm -f test
-
-  deploy:
-    needs: build
-    if: github.event_name == 'push'
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy container locally
-        shell: pwsh
-        run: |
-          docker build -t fastapi-ocr .
-          docker rm -f fastapi-ocr 2>$null
-          docker run -d --restart unless-stopped --name fastapi-ocr -p 8000:8000 fastapi-ocr
+          curl -fs http://localhost:8000/health
+          curl -fs http://localhost:8000/docs > /dev/null
