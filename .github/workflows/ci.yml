@@ -1,4 +1,4 @@
-name: CI for FastAPI
+name: CI + local deploy
 
 on:
   push:
@@ -10,37 +10,34 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      - name: Build Docker image
-        run: docker build -t fastapi-ocr .
-
-      - name: Run container and check /docs
+      - name: Build image and smoke-test
         run: |
-          docker run -d --name fastapi -p 8000:8000 fastapi-ocr
+          docker build -t fastapi-ocr .
+          docker run -d --name test -p 8000:8000 fastapi-ocr
           for i in $(seq 1 30); do
-            if curl -fs http://localhost:8000/docs > /dev/null; then
-              echo "✅ Server is up"
-              exit 0
-            fi
+            curl -fs http://localhost:8000/docs > /dev/null && break
             sleep 1
           done
-          echo "❌ Server did not start in time"
-          docker logs fastapi
-          exit 1
+          curl -f http://localhost:8000/docs
+          docker rm -f test
 
-      - name: Cleanup
-        if: always()
-        run: docker rm -f fastapi || true
+  deploy:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy container locally
+        run: |
+          docker build -t fastapi-ocr .
+          docker rm -f fastapi-ocr || true
+          docker run -d --restart unless-stopped --name fastapi-ocr -p 8000:8000 fastapi-ocr
