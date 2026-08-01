@@ -1,9 +1,16 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
-from app.domain.models import ImagePathRequest, AnalyzeResponse, EmailRequest, EmailResponse
-from app.domain.interfaces import OCRService, EmailService
-from app.api.dependencies import get_ocr_service, get_email_service
-from app.infrastructure.tasks.ocr_tasks import analyze_and_notify
 import httpx
+from celery.result import AsyncResult
+from fastapi import APIRouter, HTTPException, status
+
+from app.core.config import settings
+from app.domain.models import (
+    EmailRequest,
+    ImagePathRequest,
+    TaskAcceptedResponse,
+    TaskStatusResponse,
+)
+from app.infrastructure.tasks.celery_app import celery_app
+from app.infrastructure.tasks.ocr_tasks import analyze_document, send_email_notification
 
 router = APIRouter(prefix="/api/v1", tags=["ocr"])
 
@@ -13,73 +20,72 @@ async def health_check():
     return {"status": "ok"}
 
 
-@router.post("/analyze_doc", response_model=AnalyzeResponse, status_code=200)
-async def analyze_doc(
-    request: ImagePathRequest,
-    background_tasks: BackgroundTasks,
-    ocr_service: OCRService = Depends(get_ocr_service),
-):
-    try:
-        text = ocr_service.extract_text(request.image_path)
-
-        if request.email:
-            analyze_and_notify.delay(request.image_path, request.email)
-
-        return AnalyzeResponse(text=text)
-
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=f"OCR error: {str(e)}")
+@router.post(
+    "/analyze_doc",
+    response_model=TaskAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def analyze_doc(request: ImagePathRequest):
+    """Поставить распознавание изображения в очередь Celery."""
+    task = analyze_document.delay(request.image_path)
+    return TaskAcceptedResponse(task_id=task.id)
 
 
-@router.post("/send_message_to_email", response_model=EmailResponse, status_code=200)
-async def send_message_to_email(
-    request: EmailRequest,
-    email_service: EmailService = Depends(get_email_service),
-):
-    try:
-        success = email_service.send_notification(
-            recipient=request.recipient_email,
-            image_path=request.image_path,
-            extracted_text=request.extracted_text
-        )
-
-        if not success:
-            raise HTTPException(status_code=422, detail="Failed to send email")
-
-        return EmailResponse(message="Email sent successfully")
-
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Email error: {str(e)}")
+@router.post(
+    "/send_message_to_email",
+    response_model=TaskAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def send_message_to_email(request: EmailRequest):
+    """Поставить отправку результата OCR на почту в очередь Celery."""
+    task = send_email_notification.delay(
+        request.recipient_email,
+        request.image_path,
+        request.extracted_text,
+    )
+    return TaskAcceptedResponse(task_id=task.id)
 
 
-@router.post("/analyze_doc_by_id", response_model=AnalyzeResponse, status_code=200)
+@router.post(
+    "/analyze_doc_by_id",
+    response_model=TaskAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def analyze_doc_by_id(
     photo_id: int,
-    email: str = None,
-    ocr_service: OCRService = Depends(get_ocr_service),
 ):
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"http://host.docker.internal:8000/api/photo/{photo_id}/path/")
-            if response.status_code != 200:
-                raise HTTPException(status_code=404, detail=f"Photo with ID {photo_id} not found in Django")
-            image_path = response.json().get('path')
-            if not image_path:
-                raise HTTPException(status_code=404, detail="Photo path not found")
-    except httpx.RequestError:
-        raise HTTPException(status_code=503, detail="Django service unavailable")
+    """Получить путь к фотографии из Django и поставить OCR в Celery."""
+    url = f"{settings.DJANGO_BASE_URL.rstrip('/')}/api/photo/{photo_id}/path/"
 
     try:
-        text = ocr_service.extract_text(image_path)
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(url)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=503, detail="Django service unavailable") from exc
 
-        if email:
-            analyze_and_notify.delay(image_path, email)
+    if response.status_code == 404:
+        raise HTTPException(status_code=404, detail=f"Photo with ID {photo_id} not found")
+    if response.status_code != 200:
+        raise HTTPException(status_code=502, detail="Unexpected response from Django service")
 
-        return AnalyzeResponse(text=text)
+    image_path = response.json().get("path")
+    if not image_path:
+        raise HTTPException(status_code=502, detail="Django response does not contain photo path")
 
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Image file not found: {image_path}")
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=f"OCR error: {str(e)}")
+    task = analyze_document.delay(image_path)
+
+    return TaskAcceptedResponse(task_id=task.id)
+
+
+@router.get("/tasks/{task_id}", response_model=TaskStatusResponse)
+async def task_status(task_id: str):
+    """Получить состояние и результат фоновой задачи Celery."""
+    task = AsyncResult(task_id, app=celery_app)
+    response = TaskStatusResponse(task_id=task_id, status=task.status.lower())
+
+    if task.successful():
+        response.result = task.result
+    elif task.failed():
+        response.error = str(task.result)
+
+    return response

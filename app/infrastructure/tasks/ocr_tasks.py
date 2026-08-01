@@ -1,15 +1,22 @@
-from .celery_app import celery_app
 from app.infrastructure.email.smtp_service import SMTPEmailService
 from app.infrastructure.ocr.tesseract_service import TesseractOCRService
 
+from .celery_app import celery_app
 
-@celery_app.task(name="analyze_and_notify")
-def analyze_and_notify(image_path: str, recipient_email: str) -> dict:
 
-    ocr_service = TesseractOCRService()
-    text = ocr_service.extract_text(image_path)
+@celery_app.task(name="analyze_document")
+def analyze_document(image_path: str) -> dict[str, str]:
+    """Run Tesseract outside the FastAPI request process."""
+    text = TesseractOCRService().extract_text(image_path)
+    return {"text": text, "image_path": image_path, "status": "completed"}
 
-    email_service = SMTPEmailService()
-    email_service.send_notification(recipient_email, image_path, text)
 
-    return {"text": text, "status": "completed"}
+@celery_app.task(name="send_email_notification")
+def send_email_notification(
+    recipient_email: str,
+    image_path: str,
+    extracted_text: str,
+) -> dict[str, str]:
+    """Send an OCR notification outside the FastAPI request process."""
+    SMTPEmailService().send_notification(recipient_email, image_path, extracted_text)
+    return {"recipient_email": recipient_email, "status": "sent"}

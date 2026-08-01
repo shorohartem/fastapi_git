@@ -4,6 +4,9 @@ services:
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
+    dockerCommand: >-
+      sh -c "celery -A app.infrastructure.tasks.celery_app worker --loglevel=info &
+      exec uvicorn app.main:app --host 0.0.0.0 --port 8000"
     healthCheckPath: /health
     autoDeployTrigger: checksPass
     envVars:
@@ -11,3 +14,29 @@ services:
         value: /tmp/shared_media
       - key: TESSERACT_LANG
         value: rus+eng
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: fastapi-ocr-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: fastapi-ocr-redis
+          property: connectionString
+      - key: DJANGO_BASE_URL
+        sync: false
+      - key: DJANGO_MEDIA_URL
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: NOTIFICATION_EMAIL
+        sync: false
+
+  - type: keyvalue
+    name: fastapi-ocr-redis
+    plan: free
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru

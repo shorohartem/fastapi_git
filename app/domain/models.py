@@ -1,46 +1,28 @@
-from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Any
+
+from pydantic import BaseModel, EmailStr, Field
 
 
 class ImagePathRequest(BaseModel):
     image_path: str = Field(
         description="Путь к изображению относительно MEDIA_ROOT",
-        example="photos/cat.jpg"
+        examples=["photo.jpg"],
     )
-    email: Optional[str] = Field(
-        None,
-        description="Email для отправки результата",
-        example="admin@example.com"
-    )
-
-class AnalyzeResponse(BaseModel):
-    text: str = Field(..., description=" текст с изображения")
-    status: str = Field(default="success", description="Статус операции")
-
 
 
 class EmailRequest(BaseModel):
-    image_path: str = Field(
-        ...,
-        description="Путь к изображению",
-        example="photos/cat.jpg"
-    )
-    extracted_text: str = Field(
-        ...,
-        description="Распознанный текст для отправки",
-        example="Hello world from image"
-    )
-    recipient_email: str = Field(
-        ...,
-        description="Email получателя",
-        example="admin@example.com"
-    )
-
-class EmailResponse(BaseModel):
-    message: str = Field(..., description="Сообщение о результате")
-    status: str = Field(default="sent", description="Статус операции")
+    image_path: str = Field(description="Путь к проанализированному изображению")
+    extracted_text: str = Field(description="Распознанный текст")
+    recipient_email: EmailStr = Field(description="Email получателя")
 
 
+class TaskAcceptedResponse(BaseModel):
+    task_id: str
+    status: str = "queued"
 
-class HealthResponse(BaseModel):
-    status: str = Field(default="ok", description="Статус сервиса")
+
+class TaskStatusResponse(BaseModel):
+    task_id: str
+    status: str
+    result: Any | None = None
+    error: str | None = None
