@@ -35,4 +35,4 @@ jobs:
             sleep 1
           done
           curl -fs http://localhost:8000/health
-          curl -fs http://localhost:8000/docs > /dev/null
+          curl -fs http://localhost:8000/ > /dev/null

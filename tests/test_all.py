@@ -17,7 +17,7 @@ def test_health_method_not_allowed():
 
 
 def test_docs_available():
-    response = client.get("/docs")
+    response = client.get("/")
     assert response.status_code == 200
 
 
@@ -33,7 +33,7 @@ def test_app_title():
 
 
 def test_app_docs_url():
-    assert app.docs_url == "/docs"
+    assert app.docs_url == "/"
 
 
 def test_analyze_doc_queues_celery_task(monkeypatch):

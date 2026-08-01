@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
 from app.core.config import settings
 from app.api.router import router
 
@@ -14,15 +13,11 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(
         title="OCR Service",
-        docs_url="/docs",
+        docs_url="/",
         description="Анализ ",
         version="1.0.0",
         lifespan=lifespan
     )
-
-    @app.get("/", include_in_schema=False)
-    async def swagger_redirect():
-        return RedirectResponse(url="/docs")
 
     @app.get("/health", tags=["system"])
     async def health_check():
