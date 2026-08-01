@@ -1,0 +1,13 @@
+# Actions runner
+actions-runner/
+
+# IDE
+.idea/
+
+# Python
+pycache/
+*.pyc
+.venv/
+
+# прочее
+temp.txt
