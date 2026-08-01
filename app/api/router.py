@@ -10,7 +10,7 @@ router = APIRouter(prefix="/api/v1", tags=["ocr"])
 
 @router.get("/health")
 async def health_check():
-    return {"status": "ДИМА СУКА"}
+    return {"status": "ok"}
 
 
 @router.post("/analyze_doc", response_model=AnalyzeResponse, status_code=200)

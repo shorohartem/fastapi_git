@@ -3,8 +3,6 @@ from fastapi import FastAPI
 from app.core.config import settings
 from app.api.router import router
 
-from fastapi import FastAPI
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Starting FastAPI OCR Service...")
@@ -16,7 +14,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="OCR Service",
         docs_url="/docs",
-        description="Анализ через Tesseract и отправка уведомлений",
+        description="Анализ ",
         version="1.0.0",
         lifespan=lifespan
     )
