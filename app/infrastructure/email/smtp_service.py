@@ -8,7 +8,11 @@ class SMTPEmailService(EmailService):
     def send_notification(self, recipient: str, image_path: str, extracted_text: str) -> bool:
         msg = EmailMessage()
         msg["Subject"] = "Изображение проанализировано"
-        msg["From"] = settings.NOTIFICATION_EMAIL or settings.SMTP_USER
+        msg["From"] = (
+            settings.NOTIFICATION_EMAIL
+            or settings.SMTP_USER
+            or "noreply@example.com"
+        )
         msg["To"] = recipient
 
         body = f"""

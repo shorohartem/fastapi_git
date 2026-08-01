@@ -1,0 +1,48 @@
+services:
+  fastapi:
+    build: .
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./media:/shared_media
+    environment: &app-environment
+      MEDIA_ROOT: /shared_media
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      DJANGO_BASE_URL: ${DJANGO_BASE_URL:-http://host.docker.internal:8000}
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_USE_TLS: "false"
+      NOTIFICATION_EMAIL: noreply@example.com
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  celery_worker:
+    build: .
+    command: celery -A app.infrastructure.tasks.celery_app worker --loglevel=info
+    volumes:
+      - ./media:/shared_media
+    environment: *app-environment
+    depends_on:
+      redis:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports:
+      - "8025:8025"
+    restart: unless-stopped

@@ -17,7 +17,8 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     NOTIFICATION_EMAIL: str = ""
-    SMTP_USE_TLS: bool = True
+    # MailHog does not use TLS. Set this to true only for a real SMTP provider.
+    SMTP_USE_TLS: bool = False
 
     TESSERACT_LANG: str = "rus+eng"
 
