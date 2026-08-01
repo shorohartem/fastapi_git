@@ -16,7 +16,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="OCR Service",
         docs_url="/docs",
-        description="Анализ ерез Tesseract и отправка уведомлений",
+        description="Анализ через Tesseract и отправка уведомлений",
         version="1.0.0",
         lifespan=lifespan
     )
