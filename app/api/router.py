@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/v1", tags=["ocr"])
 
 @router.get("/health")
 async def health_check():
-    return {"status": "ok"}
+    return {"status": "ААААААААААААААА"}
 
 
 @router.post(
@@ -26,7 +26,6 @@ async def health_check():
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def analyze_doc(request: ImagePathRequest):
-    """Поставить распознавание изображения в очередь Celery."""
     task = analyze_document.delay(request.image_path)
     return TaskAcceptedResponse(task_id=task.id)
 
@@ -37,7 +36,6 @@ async def analyze_doc(request: ImagePathRequest):
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def send_message_to_email(request: EmailRequest):
-    """Поставить отправку результата OCR на почту в очередь Celery."""
     task = send_email_notification.delay(
         request.recipient_email,
         request.image_path,
@@ -54,7 +52,6 @@ async def send_message_to_email(request: EmailRequest):
 async def analyze_doc_by_id(
     photo_id: int,
 ):
-    """Получить путь к фотографии из Django и поставить OCR в Celery."""
     url = f"{settings.DJANGO_BASE_URL.rstrip('/')}/api/photo/{photo_id}/path/"
 
     try:
@@ -79,7 +76,6 @@ async def analyze_doc_by_id(
 
 @router.get("/tasks/{task_id}", response_model=TaskStatusResponse)
 async def task_status(task_id: str):
-    """Получить состояние и результат фоновой задачи Celery."""
     task = AsyncResult(task_id, app=celery_app)
     response = TaskStatusResponse(task_id=task_id, status=task.status.lower())
 

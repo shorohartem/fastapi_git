@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 class OCRService(ABC):
     @abstractmethod
     def extract_text(self, image_path: str) -> str:
-
         pass
 
 class EmailService(ABC):
@@ -15,5 +14,4 @@ class EmailService(ABC):
             image_path: str,
             extracted_text: str
     ) -> bool:
-
         pass
