@@ -18,9 +18,22 @@ docker compose up --build
 
 For every push and pull request to `main`, GitHub Actions installs dependencies,
 runs tests with coverage, builds the Docker image, and smoke-tests `/health` and
-`/docs`. The `render.yaml` blueprint configures Render to deploy `main` only after
-the GitHub checks pass. It also provisions a Redis-compatible Render Key Value
-queue and starts a Celery worker alongside the demo web service.
+Swagger. After a successful check of a push to `main`, the `deploy` job connects
+to the Ubuntu VPS, updates `/opt/fastapi_ocr` with `git pull --ff-only`, rebuilds
+the production Compose stack, and verifies the deployed `/health` endpoint.
+
+Create a GitHub environment named `production` and add these environment secrets:
+
+- `VPS_HOST`: the VPS hostname or IP address (for example `5.35.45.102`)
+- `VPS_USER`: the SSH user that owns `/opt/fastapi_ocr` and can run Docker
+- `VPS_SSH_KEY`: the private SSH key used by GitHub Actions
+- `VPS_KNOWN_HOSTS`: the trusted host-key line produced locally with
+  `ssh-keyscan -H <VPS_HOST>` after its fingerprint has been verified
+
+The corresponding public key must be present in the VPS user's
+`~/.ssh/authorized_keys`. Deployment deliberately uses `git pull --ff-only`:
+if the server checkout has conflicting or divergent changes, the job stops
+instead of overwriting them.
 
 ## First deployment to Ubuntu
 

@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: production-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
@@ -36,3 +43,58 @@ jobs:
           done
           curl -fs http://localhost:8000/health
           curl -fs http://localhost:8000/ > /dev/null
+
+  deploy:
+    name: Deploy to Ubuntu VPS
+    needs: test-and-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+    steps:
+      - name: Configure SSH
+        run: |
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+          test -n "$VPS_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy tested commit
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            'bash -s' -- '${{ github.sha }}' <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          expected_commit="$1"
+          cd /opt/fastapi_ocr
+
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+          test "$(git rev-parse HEAD)" = "$expected_commit"
+
+          docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
+
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://localhost/health > /dev/null; then
+              docker compose -f docker-compose.prod.yml ps
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker compose -f docker-compose.prod.yml ps
+          docker compose -f docker-compose.prod.yml logs --tail=100 fastapi
+          exit 1
+          REMOTE_SCRIPT
