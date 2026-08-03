@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, EmailStr, Field
@@ -26,3 +27,10 @@ class TaskStatusResponse(BaseModel):
     status: str
     result: Any | None = None
     error: str | None = None
+
+
+class PhotoResponse(BaseModel):
+    id: int
+    original_filename: str
+    content_type: str
+    created_at: datetime

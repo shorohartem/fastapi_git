@@ -1,7 +1,5 @@
-from io import BytesIO
 from pathlib import Path
 
-import httpx
 import pytesseract
 from PIL import Image
 
@@ -26,14 +24,5 @@ class TesseractOCRService(OCRService):
 
         if local_path.is_relative_to(media_root) and local_path.is_file():
             return Image.open(local_path)
-
-        if settings.DJANGO_MEDIA_URL:
-            image_url = (
-                f"{settings.DJANGO_MEDIA_URL.rstrip('/')}/"
-                f"{image_path.lstrip('/')}"
-            )
-            response = httpx.get(image_url, timeout=30, follow_redirects=True)
-            response.raise_for_status()
-            return Image.open(BytesIO(response.content))
 
         raise FileNotFoundError(f"Image not found: {image_path}")

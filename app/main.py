@@ -14,14 +14,14 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="OCR Service",
         docs_url="/",
-        description="Анализ всего шо тока можна ",
-        version="1.0.0",
+        description="Загрузка изображений и распознавание текста через Tesseract",
+        version="1.1.0",
         lifespan=lifespan
     )
 
     @app.get("/health", tags=["system"])
     async def health_check():
-        return {"status": "True"}
+        return {"status": "ok"}
 
     app.include_router(router)
     return app

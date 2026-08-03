@@ -9,8 +9,7 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://redis:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://redis:6379/0"
 
-    DJANGO_BASE_URL: str = "http://django:8000"
-    DJANGO_MEDIA_URL: str = ""
+    MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024
 
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
