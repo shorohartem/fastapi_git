@@ -1,83 +1,109 @@
-import httpx
-from celery.result import AsyncResult
-from fastapi import APIRouter, HTTPException, status
+from io import BytesIO
+import smtplib
+
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from PIL import Image, UnidentifiedImageError
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.domain.models import (
+    AnalyzeDocResponse,
     EmailRequest,
-    ImagePathRequest,
-    TaskAcceptedResponse,
-    TaskStatusResponse,
+    EmailResponse,
+    PhotoResponse,
 )
-from app.infrastructure.tasks.celery_app import celery_app
-from app.infrastructure.tasks.ocr_tasks import analyze_document, send_email_notification
+from app.infrastructure.email.smtp_service import SMTPEmailService
+from app.infrastructure.ocr.tesseract_service import TesseractOCRService
+from app.infrastructure.storage.photo_repository import PhotoRepository
 
 router = APIRouter(prefix="/api/v1", tags=["ocr"])
 
+SUPPORTED_IMAGE_FORMATS = {
+    "JPEG": (".jpg", "image/jpeg"),
+    "PNG": (".png", "image/png"),
+}
 
 
-@router.post(
-    "/analyze_doc",
-    response_model=TaskAcceptedResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def analyze_doc(request: ImagePathRequest):
-    task = analyze_document.delay(request.image_path)
-    return TaskAcceptedResponse(task_id=task.id)
+def get_photo_repository() -> PhotoRepository:
+    return PhotoRepository(settings.MEDIA_ROOT)
 
 
-@router.post(
-    "/send_message_to_email",
-    response_model=TaskAcceptedResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def send_message_to_email(request: EmailRequest):
-    task = send_email_notification.delay(
-        request.recipient_email,
-        request.image_path,
-        request.extracted_text,
+def validate_image(contents: bytes) -> tuple[str, str]:
+    try:
+        with Image.open(BytesIO(contents)) as image:
+            image.verify()
+            image_format = image.format
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="File is not a valid image") from exc
+
+    if image_format not in SUPPORTED_IMAGE_FORMATS:
+        raise HTTPException(status_code=415, detail="Only JPEG and PNG images are supported")
+
+    return SUPPORTED_IMAGE_FORMATS[image_format]
+
+
+async def get_stored_photo(photo_id: int) -> dict:
+    photo = await run_in_threadpool(get_photo_repository().get, photo_id)
+    if photo is None:
+        raise HTTPException(status_code=404, detail=f"Photo with ID {photo_id} not found")
+    return photo
+
+
+async def extract_photo_text(photo: dict) -> str:
+    return await run_in_threadpool(
+        TesseractOCRService().extract_text,
+        photo["storage_path"],
     )
-    return TaskAcceptedResponse(task_id=task.id)
 
 
 @router.post(
-    "/analyze_doc_by_id",
-    response_model=TaskAcceptedResponse,
-    status_code=status.HTTP_202_ACCEPTED,
+    "/photos",
+    response_model=PhotoResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["photos"],
 )
-async def analyze_doc_by_id(
-    photo_id: int,
-):
-    url = f"{settings.DJANGO_BASE_URL.rstrip('/')}/api/photo/{photo_id}/path/"
+async def upload_photo(file: UploadFile = File(...)):
+    contents = await file.read()
+    await file.close()
+
+    if not contents:
+        raise HTTPException(status_code=422, detail="Uploaded file is empty")
+
+    suffix, content_type = await run_in_threadpool(validate_image, contents)
+    photo = await run_in_threadpool(
+        get_photo_repository().create,
+        contents,
+        suffix,
+        file.filename or "image",
+        content_type,
+    )
+    return PhotoResponse(**photo)
+
+
+@router.post("/analyze_doc", response_model=AnalyzeDocResponse)
+async def analyze_doc(photo_id: int):
+    photo = await get_stored_photo(photo_id)
+    extracted_text = await extract_photo_text(photo)
+    return AnalyzeDocResponse(photo_id=photo_id, text=extracted_text)
+
+
+@router.post("/send_message_to_email", response_model=EmailResponse)
+async def send_message_to_email(request: EmailRequest):
+    photo = await get_stored_photo(request.photo_id)
+    extracted_text = await extract_photo_text(photo)
 
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(url)
-    except httpx.RequestError as exc:
-        raise HTTPException(status_code=503, detail="Django service unavailable") from exc
+        await run_in_threadpool(
+            SMTPEmailService().send_notification,
+            str(request.recipient_email),
+            photo["storage_path"],
+            extracted_text,
+        )
+    except (OSError, smtplib.SMTPException) as exc:
+        raise HTTPException(status_code=502, detail="Email service unavailable") from exc
 
-    if response.status_code == 404:
-        raise HTTPException(status_code=404, detail=f"Photo with ID {photo_id} not found")
-    if response.status_code != 200:
-        raise HTTPException(status_code=502, detail="Unexpected response from Django service")
-
-    image_path = response.json().get("path")
-    if not image_path:
-        raise HTTPException(status_code=502, detail="Django response does not contain photo path")
-
-    task = analyze_document.delay(image_path)
-
-    return TaskAcceptedResponse(task_id=task.id)
-
-
-@router.get("/tasks/{task_id}", response_model=TaskStatusResponse)
-async def task_status(task_id: str):
-    task = AsyncResult(task_id, app=celery_app)
-    response = TaskStatusResponse(task_id=task_id, status=task.status.lower())
-
-    if task.successful():
-        response.result = task.result
-    elif task.failed():
-        response.error = str(task.result)
-
-    return response
+    return EmailResponse(
+        photo_id=request.photo_id,
+        recipient_email=request.recipient_email,
+        email_sent=True,
+    )

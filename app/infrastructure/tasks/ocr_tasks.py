@@ -6,7 +6,6 @@ from .celery_app import celery_app
 
 @celery_app.task(name="analyze_document")
 def analyze_document(image_path: str) -> dict[str, str]:
-    """Run Tesseract outside the FastAPI request process."""
     text = TesseractOCRService().extract_text(image_path)
     return {"text": text, "image_path": image_path, "status": "completed"}
 
@@ -17,6 +16,5 @@ def send_email_notification(
     image_path: str,
     extracted_text: str,
 ) -> dict[str, str]:
-    """Send an OCR notification outside the FastAPI request process."""
     SMTPEmailService().send_notification(recipient_email, image_path, extracted_text)
     return {"recipient_email": recipient_email, "status": "sent"}
