@@ -15,10 +15,6 @@ from app.infrastructure.tasks.ocr_tasks import analyze_document, send_email_noti
 router = APIRouter(prefix="/api/v1", tags=["ocr"])
 
 
-@router.get("/health")
-async def health_check():
-    return {"status": "ААААААААААААААА"}
-
 
 @router.post(
     "/analyze_doc",
